@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Wildberries — ПВЗ</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      background: linear-gradient(135deg, #f0f0ff 0%, #e0e0ff 100%);
+      color: #333;
+      min-height: 100vh;
+    }
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    #login-screen {
+      display: flex;
+      background: linear-gradient(135deg, #6c5ce7 0%, #5d4de0 100%);
+      color: white;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      text-align: center;
+    }
+    .logo {
+      font-size: 36px;
+      font-weight: bold;
+      margin-bottom: 25px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    input, button, select {
+      padding: 14px;
+      margin: 10px 0;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      width: 100%;
+      max-width: 400px;
+    }
+    input {
+      background: white;
+      color: #333;
+    }
+    button {
+      cursor: pointer;
+      background: #6c5ce7;
+      color: white;
+      border: none;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      background: #5d4de0;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .btn-danger {
+      background: #e74c3c;
+    }
+    .btn-danger:hover {
+      background: #c0392b;
+    }
+    .btn-success {
+      background: #2ecc71;
+    }
+    .btn-success:hover {
+      background: #27ae60;
+    }
+    .btn-warning {
+      background: #f39c12;
+    }
+    .btn-warning:hover {
+      background: #d35400;
+    }
+    .order-card {
+      background: white;
+      border-radius: 12px;
+      padding: 18px;
+      margin: 15px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      border-left: 4px solid #6c5ce7;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #eee;
+    }
+    .header h2 {
+      color: #6c5ce7;
+    }
+    .qr-container {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+      text-align: center;
+      margin: 20px auto;
+      max-width: 300px;
+    }
+    .qr-header {
+      color: #6c5ce7;
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .qr-barcode {
+      margin: 15px 0;
+      font-family: monospace;
+      font-size: 16px;
+    }
+    .review-card {
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin: 10px 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .rating {
+      color: #f39c12;
+      font-size: 20px;
+      margin: 8px 0;
+    }
+    .location-input {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 2px solid #6c5ce7;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Экран входа -->
+<div id="login-screen" class="screen">
+  <div class="logo">ПВЗ Wildberries</div>
+  <h2>Вход для сотрудников</h2>
+  <p>Введите пароль кассира</p>
+  <input type="password" id="password-input" placeholder="Пароль" maxlength="4" autofocus />
+  <button onclick="login()">Войти</button>
+</div>
+
+<!-- Главный экран -->
+<div id="main-screen" class="screen">
+  <div class="header">
+    <h2>📦 Пункт выдачи — Балашиха</h2>
+    <div>
+      <button onclick="showNewOrders()">Новые заказы</button>
+      <button onclick="showReviews()">Отзывы</button>
+      <button onclick="logout()">Выход</button>
+    </div>
+  </div>
+  <div id="main-content">
+    <h3>Добро пожаловать!</h3>
+    <p>Выберите раздел в меню для начала работы.</p>
+    <div style="margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+      <div class="order-card">
+        <h3>📥 Новые заказы</h3>
+        <p>Принимайте поступившие заказы</p>
+        <button onclick="showNewOrders()">Открыть</button>
+      </div>
+      <div class="order-card">
+        <h3>⭐ Отзывы</h3>
+        <p>Просмотрите отзывы клиентов</p>
+        <button onclick="showReviews()">Открыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Новые заказы -->
+<div id="new-orders-screen" class="screen">
+  <div class="header">
+    <h2>🆕 Новые заказы</h2>
+    <button onclick="backToMain()">← Назад</button>
+  </div>
+  <div id="new-orders-list"></div>
+</div>
+
+<!-- Экран приёма заказа -->
+<div id="receive-screen" class="screen">
+  <div class="header">
+    <h2>🖨️ Приём заказа</h2>
+    <button onclick="backToNewOrders()">← Назад</button>
+  </div>
+  <div id="order-details"></div>
+  <div class="qr-container" id="qr-container" style="display:none;">
+    <div class="qr-header">WB</div>
+    <div id="qr-code"></div>
+    <div class="qr-barcode" id="barcode-number"></div>
+  </div>
+  <input type="text" class="location-input" id="location-input" placeholder="Укажите место хранения (например: Полка 12)" />
+  <button class="btn-success" onclick="confirmReceive()">Подтвердить приём</button>
+</div>
+
+<!-- Отзывы -->
+<div id="reviews-screen" class="screen">
+  <div class="header">
+    <h2>⭐ Отзывы клиентов</h2>
+    <button onclick="backToMain()">← Назад</button>
+  </div>
+  <div id="reviews-list"></div>
+</div>
+
+<script>
+  // === Инициализация Firebase ===
+  const firebaseConfig = {
+    databaseURL: "https://renessans-bank-3df94-default-rtdb.europe-west1.firebasedatabase.app/"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  const CASHIER_PASSWORD = "0506";
+  let currentOrderKey = null;
+  let currentOrder = null;
+
+  // === Вход ===
+  function login() {
+    if (document.getElementById("password-input").value === CASHIER_PASSWORD) {
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("main-screen").style.display = "flex";
+      loadReviews(); // Подгружаем отзывы сразу
+    } else {
+      alert("Неверный пароль! Попробуйте снова.");
+    }
+  }
+
+  function logout() {
+    document.getElementById("main-screen").style.display = "none";
+    document.getElementById("new-orders-screen").style.display = "none";
+    document.getElementById("receive-screen").style.display = "none";
+    document.getElementById("reviews-screen").style.display = "none";
+    document.getElementById("login-screen").style.display = "flex";
+    document.getElementById("password-input").value = "";
+  }
+
+  function backToMain() {
+    document.getElementById("new-orders-screen").style.display = "none";
+    document.getElementById("receive-screen").style.display = "none";
+    document.getElementById("reviews-screen").style.display = "none";
+    document.getElementById("main-screen").style.display = "flex";
+  }
+
+  function backToNewOrders() {
+    document.getElementById("receive-screen").style.display = "none";
+    document.getElementById("new-orders-screen").style.display = "flex";
+    loadNewOrders();
+  }
+
+  // === Новые заказы ===
+  function showNewOrders() {
+    document.getElementById("main-screen").style.display = "none";
+    document.getElementById("new-orders-screen").style.display = "flex";
+    loadNewOrders();
+  }
+
+  function loadNewOrders() {
+    const list = document.getElementById("new-orders-list");
+    list.innerHTML = "<p>Загрузка новых заказов...</p>";
+
+    db.ref('orders')
+      .orderByChild('status')
+      .equalTo('created')
+      .once('value')
+      .then(snapshot => {
+        list.innerHTML = "";
+        if (!snapshot.exists()) {
+          list.innerHTML = "<p>Новых заказов нет.</p>";
+          return;
+        }
+
+        snapshot.forEach(child => {
+          const order = child.val();
+          const div = document.createElement("div");
+          div.className = "order-card";
+          div.innerHTML = `
+            <h3>Заказ №${child.key.slice(-6)}</h3>
+            <p><strong>Клиент:</strong> ${order.userId}</p>
+            <p><strong>Сумма:</strong> ${order.total} ₽</p>
+            <p><strong>Оплата:</strong> ${order.paymentMethod === 'cash' ? 'При получении' : 'Онлайн'}</p>
+            <p><strong>Товаров:</strong> ${order.items.length}</p>
+            <button class="btn-success" onclick="prepareReceive('${child.key}', ${JSON.stringify(order).replace(/'/g, "\\'")})">Принять заказ</button>
+          `;
+          list.appendChild(div);
+        });
+      });
+  }
+
+  // === Приём заказа ===
+  function prepareReceive(orderKey, order) {
+    currentOrderKey = orderKey;
+    currentOrder = order;
+    document.getElementById("new-orders-screen").style.display = "none";
+    document.getElementById("receive-screen").style.display = "flex";
+
+    const details = document.getElementById("order-details");
+    details.innerHTML = `
+      <h3>Заказ №${orderKey.slice(-6)}</h3>
+      <p><strong>Клиент:</strong> ${order.userId}</p>
+      <p><strong>Сумма:</strong> ${order.total} ₽</p>
+      <p><strong>Оплата:</strong> ${order.paymentMethod === 'cash' ? 'При получении' : 'Онлайн'}</p>
+      <h4>Товары:</h4>
+      <ul>${order.items.map(item => `<li>${item.name} — ${item.price} ₽</li>`).join('')}</ul>
+    `;
+
+    // Генерация QR-кода
+    const qrData = JSON.stringify({
+      orderId: orderKey,
+      pvz: "PVZ_BALASHIHA_32D",
+      timestamp: Date.now()
+    });
+
+    document.getElementById("qr-code").innerHTML = "";
+    new QRCode(document.getElementById("qr-code"), {
+      text: qrData,
+      width: 180,
+      height: 180
+    });
+
+    // Генерация штрихкода (EAN-13 имитация)
+    const now = Date.now().toString().slice(-9);
+    const nameHash = order.items[0].name.split('').reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0).toString().replace('-', '').slice(0,3);
+    let code12 = (now + nameHash).padEnd(12, '0').slice(0,12);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(code12[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+    const check = (10 - (sum % 10)) % 10;
+    const barcode = code12 + check;
+    document.getElementById("barcode-number").textContent = barcode;
+    document.getElementById("qr-container").style.display = "block";
+  }
+
+  function confirmReceive() {
+    const location = document.getElementById("location-input").value.trim();
+    if (!location) {
+      alert("Пожалуйста, укажите место хранения!");
+      return;
+    }
+
+    db.ref('orders/' + currentOrderKey).update({
+      status: "received",
+      location: location,
+      receivedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+      // Голосовое уведомление
+      if ('speechSynthesis' in window) {
+        const msg = `Заказ готов к выдаче. Место хранения: ${location}.`;
+        const utterance = new SpeechSynthesisUtterance(msg);
+        utterance.lang = 'ru-RU';
+        speechSynthesis.speak(utterance);
+      }
+
+      alert("Заказ успешно принят! Клиент получит уведомление.");
+      document.getElementById("receive-screen").style.display = "none";
+      showNewOrders();
+    }).catch(err => {
+      alert("Ошибка при приёме заказа: " + err.message);
+    });
+  }
+
+  // === Отзывы ===
+  function showReviews() {
+    document.getElementById("main-screen").style.display = "none";
+    document.getElementById("reviews-screen").style.display = "flex";
+    loadReviews();
+  }
+
+  function loadReviews() {
+    const list = document.getElementById("reviews-list");
+    list.innerHTML = "<p>Загрузка отзывов...</p>";
+
+    // В реальной системе отзывы хранились бы в отдельной коллекции
+    // Здесь имитируем через заказы со статусом "issued"
+    db.ref('orders')
+      .orderByChild('status')
+      .equalTo('issued')
+      .limitToLast(10)
+      .once('value')
+      .then(snapshot => {
+        list.innerHTML = "";
+        if (!snapshot.exists()) {
+          list.innerHTML = "<p>Отзывов пока нет.</p>";
+          return;
+        }
+
+        let count = 0;
+        snapshot.forEach(child => {
+          if (count >= 5) return;
+          const order = child.val();
+          const div = document.createElement("div");
+          div.className = "review-card";
+          // Имитация отзыва
+          const rating = Math.floor(Math.random() * 2) + 4; // 4 или 5
+          const comments = [
+            "Отличный сервис!",
+            "Быстро и удобно!",
+            "Спасибо за оперативность!",
+            "Всё понравилось!",
+            "Рекомендую этот ПВЗ!"
+          ];
+          const comment = comments[Math.floor(Math.random() * comments.length)];
+
+          div.innerHTML = `
+            <div class="rating">{"★".repeat(rating)}{"☆".repeat(5 - rating)}</div>
+            <p>${comment}</p>
+            <p><strong>Клиент:</strong> ${order.userId}</p>
+            <p><strong>Дата:</strong> ${new Date(order.issuedAt).toLocaleDateString()}</p>
+          `;
+          list.appendChild(div);
+          count++;
+        });
+      });
+  }
+
+  // === Инициализация ===
+  document.getElementById("login-screen").style.display = "flex";
+</script>
+
+</body>
+</html>
