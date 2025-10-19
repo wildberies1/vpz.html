@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ПВЗ — Wildberries</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background: linear-gradient(135deg, #f0f0ff 0%, #e0e0ff 100%); color: #333; min-height: 100vh; }
+    .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; padding: 20px; overflow-y: auto; }
+    #login { display: flex; background: linear-gradient(135deg, #6c5ce7 0%, #5d4de0 100%); color: white; justify-content: center; align-items: center; flex-direction: column; }
+    input, button { padding: 14px; margin: 10px 0; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 100%; max-width: 400px; }
+    button { cursor: pointer; background: #6c5ce7; color: white; border: none; font-weight: bold; }
+    button:hover { background: #5d4de0; }
+    .btn-success { background: #2ecc71; }
+    .order-card { background: white; border-radius: 12px; padding: 18px; margin: 15px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .qr-box { background: white; padding: 20px; border-radius: 12px; text-align: center; margin: 20px auto; max-width: 300px; box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+    .wb { color: #6c5ce7; font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<div id="login" class="screen">
+  <h2>🔐 Вход в ПВЗ</h2>
+  <input type="password" id="pwd" placeholder="Пароль: 0506" maxlength="4" autofocus />
+  <button onclick="login()">Войти</button>
+</div>
+
+<div id="main" class="screen">
+  <h2>📦 ПВЗ — Балашиха</h2>
+  <button onclick="loadOrders()">Обновить заказы</button>
+  <div id="orders"></div>
+</div>
+
+<div id="receive" class="screen">
+  <h2>🖨️ Приём заказа</h2>
+  <div id="details"></div>
+  <div class="qr-box">
+    <div class="wb">WB</div>
+    <div id="qr"></div>
+    <div id="barcode" style="font-family:monospace; margin-top:10px;"></div>
+  </div>
+  <input type="text" id="loc" placeholder="Место хранения (например: Полка 12)" style="width:100%; padding:12px; margin:10px 0;" />
+  <button class="btn-success" onclick="confirm()">Подтвердить приём</button>
+  <button onclick="back()">Назад</button>
+</div>
+
+<script>
+  const config = {
+    databaseURL: "https://renessans-bank-3df94-default-rtdb.europe-west1.firebasedatabase.app/"
+  };
+  firebase.initializeApp(config);
+  const db = firebase.database();
+
+  let currentKey = null;
+
+  function login() {
+    if (document.getElementById("pwd").value === "0506") {
+      document.getElementById("login").style.display = "none";
+      document.getElementById("main").style.display = "flex";
+      loadOrders();
+    } else {
+      alert("Неверный пароль!");
+    }
+  }
+
+  function loadOrders() {
+    db.ref('orders').orderByChild('status').equalTo('created').once('value', snap => {
+      const el = document.getElementById("orders");
+      el.innerHTML = "";
+      if (!snap.exists()) {
+        el.innerHTML = "<p>Новых заказов нет</p>";
+        return;
+      }
+      snap.forEach(child => {
+        const o = child.val();
+        const div = document.createElement("div");
+        div.className = "order-card";
+        div.innerHTML = `
+          Заказ №${child.key.slice(-6)}<br>
+          Телефон: ${o.user}<br>
+          Сумма: ${o.total} ₽<br>
+          <button class="btn-success" onclick="prepare('${child.key}', ${JSON.stringify(o).replace(/'/g,"\\'")})">Принять</button>
+        `;
+        el.appendChild(div);
+      });
+    });
+  }
+
+  function prepare(key, order) {
+    currentKey = key;
+    document.getElementById("main").style.display = "none";
+    document.getElementById("receive").style.display = "flex";
+    
+    document.getElementById("details").innerHTML = `
+      <p><strong>Заказ:</strong> №${key.slice(-6)}</p>
+      <p><strong>Клиент:</strong> ${order.user}</p>
+      <p><strong>Сумма:</strong> ${order.total} ₽</p>
+    `;
+
+    // QR
+    const qrData = JSON.stringify({orderId: key, pvz: "PVZ_BALASHIHA"});
+    document.getElementById("qr").innerHTML = "";
+    new QRCode(document.getElementById("qr"), { text: qrData, width: 180, height: 180 });
+
+    // Штрихкод
+    const now = Date.now().toString().slice(-9);
+    const nameHash = order.items[0].name.split('').reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0).toString().replace('-', '').slice(0,3);
+    let code12 = (now + nameHash).padEnd(12, '0').slice(0,12);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += parseInt(code12[i]) * (i % 2 === 0 ? 1 : 3);
+    const check = (10 - (sum % 10)) % 10;
+    document.getElementById("barcode").textContent = code12 + check;
+  }
+
+  function confirm() {
+    const loc = document.getElementById("loc").value.trim();
+    if (!loc) return alert("Укажите место!");
+    db.ref('orders/' + currentKey).update({
+      status: "received",
+      location: loc,
+      receivedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+      if (window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance(`Заказ готов. Место: ${loc}.`);
+        u.lang = 'ru-RU';
+        speechSynthesis.speak(u);
+      }
+      alert("Заказ принят!");
+      back();
+    });
+  }
+
+  function back() {
+    document.getElementById("receive").style.display = "none";
+    document.getElementById("main").style.display = "flex";
+    loadOrders();
+  }
+
+  document.getElementById("login").style.display = "flex";
+</script>
+
+</body>
+</html>
